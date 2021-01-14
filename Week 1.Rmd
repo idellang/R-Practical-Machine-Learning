@@ -1,0 +1,79 @@
+---
+title: "Week 1"
+author: "Me"
+date: "1/5/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(kernlab)
+data("spam") 
+head(spam)
+```
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+
+spam %>%
+      ggplot(aes(your))+
+      geom_density(aes(col =type ), size = 2)+
+      geom_vline(xintercept = .5)
+```
+Algorithm
+- find value of C
+- if frequency of your > C, predict 'Spam'
+- C = .5
+
+Make prediction
+```{r}
+prediction = ifelse(spam$your > .5, 'spam','nonspam')
+table(prediction, spam$type)/length(spam$type)
+```
+
+Accuracy = .459 + .292 = .751 or 75%
+
+
+```{r}
+library(kernlab)
+data(spam)
+set.seed(333)
+
+small_spam = spam[sample(dim(spam)[1], size = 10),]
+spam_label = (small_spam$type == 'spam')*1 + 1
+plot(small_spam$capitalAve, col = spam_label)
+```
+
+
+Check the average number of capital letters. 
+
+Prediction rule 1:
+- capital_ave > 2.7 =  'spam'
+- capital_ave < 2.4 = 'nonspam'
+- between 2.4, 2.45 = 'spam'
+- between 2.45, 2.7 = 'non spam'
+
+This prediction will result to perfect train accuracy
+
+prediction rule 2:
+- capital ave > 2.4 'spam'
+- capital ave <= 2.4 'non spam'
+
+If this model is applied in the whole dataset, rule 2 has higher accuracy.
+
+
+
+
+
+
+
+
+
+
+
+
+

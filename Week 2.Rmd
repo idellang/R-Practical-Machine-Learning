@@ -1,0 +1,847 @@
+---
+title: "Week 2"
+author: "Me"
+date: "1/7/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Caret package
+
+Spam example: data splitting
+
+```{r}
+library(caret)
+library(kernlab)
+data(spam)
+```
+
+```{r}
+in_train = createDataPartition(y = spam$type, p = .75, list = FALSE)
+
+#subset data
+training = spam[in_train,]
+testing = spam[-in_train,]
+
+#check dimensions
+dim(training)
+dim(spam)
+dim(testing)
+```
+
+Spam Example: fit a model
+```{r}
+set.seed(32343)
+model_fit = train(type ~. , data = training, method = 'glm')
+model_fit
+```
+
+Spam Example: Final model
+```{r}
+model_fit$finalModel
+```
+
+
+Spam example: Prediction
+```{r}
+prediction = predict(model_fit, newdata = testing)
+head(prediction)
+```
+
+Spam example: Calculate confusion matrix
+```{r}
+confusionMatrix(prediction, testing$type)
+```
+
+
+##Data slicing
+
+split on the type
+75% on training set
+```{r}
+in_train = createDataPartition(y = spam$type, p = .75, list = FALSE)
+
+#subset data
+training = spam[in_train,]
+testing = spam[-in_train,]
+
+#check dimensions
+dim(training)
+dim(spam)
+dim(testing)
+```
+
+### Kfold 
+Each folds has the same number of items
+```{r}
+set.seed(32323)
+folds = createFolds(y = spam$type, k = 10, list = TRUE, returnTrain = TRUE)
+sapply(folds, length)
+```
+```{r}
+folds$Fold01[1:10]
+```
+
+Return test set on kfold
+```{r}
+set.seed(32323)
+folds = createFolds(y = spam$type, k = 10, list = TRUE, returnTrain = FALSE)
+sapply(folds, length)
+```
+```{r}
+folds$Fold01[1:10]
+```
+
+### Resampling
+```{r}
+set.seed(32323)
+folds = createResample(y = spam$type, times = 10, list = TRUE)
+sapply(folds, length)
+```
+```{r}
+folds$Resample01[1:10]
+```
+You might get the same samples back
+
+### Time slices
+```{r}
+set.seed(32323)
+tme = 1:1000
+folds = createTimeSlices(y = tme, initialWindow = 20, horizon = 10)
+names(folds)
+```
+20 samples on the first window
+```{r}
+folds$train$Training020
+```
+
+```{r}
+folds$test$Testing020
+```
+
+## Training options
+
+```{r}
+in_train = createDataPartition(y = spam$type, p = .75, list = FALSE)
+
+#subset data
+training = spam[in_train,]
+testing = spam[-in_train,]
+
+model_fit = train(type ~. , data = training, method = 'glm')
+model_fit
+```
+
+### Train options
+
+```{r}
+?train
+```
+
+Metric options
+Continuous
+- RMSE 
+- Rsquared
+
+Categorical
+- Accuracy = fraction correct
+- kappa = measure of concordance
+
+```{r}
+args(trainControl)
+```
+Much more precise on how to train model
+
+Train control resampling
+method
+- boot = boostrapping
+- boot632 = bootstrapping with adjustment
+- cv = cross validation
+- repeatedcv = repeated cross validation
+- LOOCV = leave one out
+
+number
+- for boot/ cv
+- number of subsamples to take
+
+repeats
+- number of times to repeat subsampling
+- if big this can slow down
+
+Setting the seed
+- often useful to set overall seed
+- you can set seed for each resample
+- seeding each resample is useful for parallel fits.
+
+
+## Plotting predictors
+```{r}
+library(ISLR)
+library(caret)
+library(ggplot2)
+data(Wage)
+summary(Wage)
+```
+
+Get training and testing
+```{r}
+intrain = createDataPartition(y = Wage$wage, p = .7, list = FALSE)
+training = Wage[intrain, ]
+testing = Wage[-intrain,]
+
+dim(training)
+dim(testing)
+```
+
+Feature plot caret package
+```{r}
+featurePlot(x = training[,c('age','education','jobclass')], y = training$wage, plot = 'pairs')
+```
+
+
+```{r}
+qplot(age, wage, data = training)
+```
+
+
+```{r}
+qplot(age, wage, color = jobclass, data = training)
+```
+
+Add regression smoothers
+```{r}
+qq = qplot(age, wage, color = education, data = training)
+
+qq+ geom_smooth(method = 'lm', formula = y ~x)
+```
+
+cut2, making factors
+
+```{r}
+library(Hmisc)
+
+cutWage = cut2(training$wage, g = 3)
+table(cutWage)
+```
+```{r}
+p1 = qplot(cutWage, age, data = training, fill = cutWage, geom = c('boxplot'))
+p1
+```
+
+
+
+Boxplots with points ovelayed
+```{r}
+library(gridExtra)
+p2 = qplot(cutWage, age, data = training, fill = cutWage, geom = c('boxplot','jitter'))
+grid.arrange(p1, p2, ncol = 2)
+```
+
+Tables
+```{r}
+t1 = table(cutWage, training$jobclass)
+t1
+```
+```{r}
+prop.table(t1,1)
+```
+
+Density plots
+```{r}
+qplot(wage, color = education, data= training, geom = 'density')
+```
+
+Check for caret visualizations. 
+
+Things that you should be looking for
+- imbalance in outcomes/predictors
+- outliers
+- group of points not explained by predictor
+- skewed variables
+
+## Preprocessing
+
+Useful for model based approaches
+```{r}
+library(caret)
+library(kernlab)
+data(spam)
+
+intrain = createDataPartition(y = spam$type, p = .75, list = FALSE)
+
+training = spam[intrain,]
+testing = spam[-intrain,]
+
+hist(training$capitalAve, main = '', xlab = 'ave.capital run length')
+```
+
+Variable is skewed.
+
+```{r}
+mean(training$capitalAve)
+sd(training$capitalAve)
+```
+
+#### Standardizing
+```{r}
+train_cap_ave = training$capitalAve
+train_cap_aveS = (train_cap_ave - mean(train_cap_ave))/sd(train_cap_ave)
+mean(train_cap_aveS)
+sd(train_cap_aveS)
+```
+
+Standardizing test set. Must use the training values
+```{r}
+test_cap_ave = testing$capitalAve
+test_cap_aveS = (test_cap_ave - mean(train_cap_ave))/sd(train_cap_ave)
+mean(test_cap_aveS)
+sd(test_cap_aveS)
+```
+
+Use preprocess function
+```{r}
+preObj = preProcess(training[,-58], method = c('center','scale'))
+train_cap_aveS = predict(preObj, training[,-58])$capitalAve
+mean(train_cap_aveS)
+sd(train_cap_aveS)
+```
+
+```{r}
+test_cap_aveS = predict(preObj, testing[,-58])$capitalAve
+mean(test_cap_aveS)
+sd(test_cap_aveS)
+```
+
+Standardizing - preProcess argument directly to train function
+```{r}
+set.seed(32343)
+model_fit = train(type ~ ., data = training, preProcess = c('center','scale'), method = 'glm')
+mmodel_fit
+```
+
+
+Standardizing using boxcox
+```{r}
+preObj = preProcess(training[,-58], method = c('BoxCox'))
+train_cap_aveS = predict(preObj, training[,-58])$capitalAve
+par(mfrow = c(1,2))
+hist(train_cap_aveS)
+qqnorm(train_cap_aveS)
+```
+
+Standardizing- imputing data
+```{r}
+set.seed(13343)
+
+#make some NA
+training$capAve = training$capitalAve
+selectNA = rbinom(dim(training)[1], size = 1, prob = .05) == 1
+training$capAve[selectNA] = NA
+
+#impute and standardize
+preObj = preProcess(training[,-58], method = 'knnImpute')
+capAve = predict(preObj, training[,-58])$capAve
+
+##standardize true values
+cap_ave_truth = training$capitalAve
+cap_ave_truth = (cap_ave_truth - mean(cap_ave_truth))/sd(cap_ave_truth)
+```
+
+
+Comparison between actual 
+```{r}
+quantile(capAve - cap_ave_truth)
+```
+Close to zeros
+
+Select only those that are imputed
+```{r}
+quantile(capAve - cap_ave_truth[selectNA])
+```
+Notes
+- training and test must be processed the same way
+- test transforms will be likely imperfect especially if collected at different times
+- careful when transforming factor variables
+- check preprocess with caret
+
+## Covariate creation
+Covariate are called features or predictors
+Two levels
+- level 1: raw data to covariate
+- levle 2: transforming tidy covariates
+
+Example
+```{r}
+library(ISLR)
+library(caret)
+data(Wage)
+```
+
+```{r}
+in_train = createDataPartition(y=  Wage$wage, p = .7, list = F)
+training = Wage[in_train,]
+testing = Wage[-in_train,]
+```
+
+
+Turn covariates to add, dummy variables
+```{r}
+table(training$jobclass)
+```
+```{r}
+dummies = dummyVars(wage ~ jobclass, data = training)
+head(predict(dummies, newdata = training))
+```
+
+Removing zero covariates
+
+No variability
+```{r}
+#save metrics to calculate metrics
+nsv = nearZeroVar(training, saveMetrics = TRUE)
+nsv
+```
+
+Spline basis
+
+Fit curvy lines
+```{r}
+library(splines)
+bsBasis = bs(training$age, df = 3)
+head(bsBasis)
+```
+Age, age^2, age^3. For curvy model fitting
+
+```{r}
+lm1 = lm(wage ~ bsBasis, data = training)
+plot(training$age, training$wage, pch = 19, cex = .5)
+points(training$age, predict(lm1, newdata = training), col = 'red', pch=  19, cex = .5)
+```
+
+Splines on test set
+
+Predict on same variables using same exact procedure on training set
+
+```{r}
+head(predict(bsBasis, age = testing$age))
+```
+Notes and further reading
+level 1 - science is key. Google feature extraction for type of data you want to analyze. 
+err on more features
+
+level 2 - feature cration, covariates to new covariates
+- function preprocess in caret will handle some preprocessing
+- create new covariates if you think they will improve fit
+- use EDA on training set for creating them
+- be careful about overfitting
+
+- if you want to fit spline models, use gam method in the caret package which allows smoothing of multiple variables
+
+
+## Preprocessing with PCA
+
+Correlated predictors
+```{r}
+library(caret)
+library(kernlab)
+data(spam)
+```
+
+```{r}
+in_train = createDataPartition(y = spam$type, p = .75, list = FALSE)
+training = spam[in_train, ]
+testing = spam[-in_train, ]
+```
+
+```{r}
+M = abs(cor(training[,-58]))
+#remove correlation with themselves
+diag(M) = 0
+#which of the variables have correlation with .8
+which(M > .8, arr.ind = T)
+```
+
+Correlated predictors
+```{r}
+names(spam)[c(34,32)]
+```
+```{r}
+plot(spam[,34], spam[,32])
+```
+Basic PCA idea
+- we might not need every predictor
+- weighted combination of predictors might be better
+- combination that captures most information possible
+- benefits
+      - reduced predictors
+      - reduced noise
+
+We could rotate the plot
+```{r}
+X = .71*training$num415 + .71*training$num857
+Y = .71*training$num415 - .71*training$num857
+plot(X,Y)
+```
+Most variability is from X axis, and most variables have Y value of zero. adding variable takes information while subtracting the variables reduces information. 
+
+Related problems
+- You have multivariate variables X1...Xn, So X1 = (X11, ... X1n)
+      - find new set of multivariate variables that are uncorrelated and explain as much variance as possible
+      - if you put all variables together in one matrix, find matrix created with fewer variables (lower rank) that explains original data
+      
+- First goal is statistical, second goal is data compression. Both useful for machine learning
+
+Related solutions = PCA/SVD
+
+SVD 
+- if X is a matrix with each variable in a column and each observation in a row, then SVD is matrix decomposition
+            X = UDV^t
+      where U - left singular vectors
+      columns of V - right singular vectors
+      D - digonal matrix - singular values
+- PCA - equal to ight singular values if you first scale the variables
+
+PCA
+```{r}
+small_spam = spam[,c(32,34)]
+prComp = prcomp(small_spam)
+
+plot(prComp$x[,1],prComp$x[,2])
+```
+PCA allows for more than 1 variable. makes compute of sum and differences of different variables. 
+
+Check rotation matrix - how it sums up variables to get components
+```{r}
+prComp$rotation
+```
+PC1 = .7 * num857 + .7 * num415
+
+PCA on spam data
+```{r}
+typecolor = ((spam$type == 'spam') * 1 + 1)
+prcomp = prcomp(log10(spam[,-58] + 1)) # make normal
+
+plot(prcomp$x[,1], prcomp$x[,2], col = typecolor, xlab = 'PC1', ylab = 'PC2')
+```
+PC1 explains most variability. On PC1 there's a bit of separation from spam messages to non spam. This is a way to reduce dataset 
+
+PCA with caret
+```{r}
+preproc = preProcess(log10(spam[,-58] + 1), method = 'pca', pcaComp = 2)
+spamPC = predict(preproc, log10(spam[,-58] + 1))
+plot(spamPC[,1], spamPC[,2], col = typecolor)
+```
+There's separation between spam and nonspam on both PCs
+
+```{r}
+preproc = preProcess(log10(spam[,-58] + 1), method = 'pca', pcaComp = 2)
+trainPc = predict(preproc, log10(training[,-58] + 1))
+model_fit = train(x = trainPc, y = training$type, method = 'glm', data = trainPc)
+```
+
+```{r}
+testPc = predict(preproc, log10(testing[,-58] + 1))
+confusionMatrix(testing$type, predict(model_fit, testPc))
+```
+
+Alternative approach using one function
+```{r}
+model_fit = train(type ~., method = 'glm', preProcess = 'pca', data = training)
+confusionMatrix(testing$type, predict(model_fit, testing))
+```
+
+Notes on PCs
+- useful for linear type models
+- make it harder to interpret predictors
+- watch out for outliers
+      - transform first using log or boxcox
+      - plot predictors to identify problems
+      
+
+## Predicting with regression      
+- Fit simple regression model 
+- plugin new covariates and multiply by coefficient
+- useful when linear model is nearly correct
+
+Pros
+- easy to implement
+- easy to interpret
+
+Cons
+- often poor performance
+
+Example: old faithful interruptions
+```{r}
+library(caret)
+data("faithful")
+
+set.seed(333)
+in_train = createDataPartition(y = faithful$waiting, p =.5, list = F)
+train_faith = faithful[in_train, ]
+test_faith = faithful[-in_train, ]
+
+head(train_faith)
+```
+
+```{r}
+plot(train_faith$waiting, train_faith$eruptions, pch= 19, col = 'blue', xlab=  'waiting', ylab = 'duration')
+```
+```{r}
+lm1 = lm(eruptions ~ waiting, data = train_faith)
+summary(lm1)
+```
+
+Model fit
+```{r}
+plot(train_faith$waiting, train_faith$eruptions, pch = 19, col = 'blue', xlab=  'waiting', ylab=  'duration')
+lines(train_faith$waiting, lm1$fitted.values, lwd = 3)
+```
+```{r}
+newdata = data.frame(waiting = 80)
+predict(lm1, newdata)
+```
+Plot predictions - training and testing
+
+```{r}
+par(mfrow = c(1,2))
+plot(train_faith$waiting, train_faith$eruptions, pch = 19, col = 'blue', xlab = 'waiting', ylab = 'duration')
+lines(train_faith$waiting, predict(lm1), lwd = 3)
+plot(test_faith$waiting, test_faith$eruptions, pch = 19, col = 'blue', xlab = 'waiting', ylab = 'duration')
+lines(test_faith$waiting, predict(lm1, newdata = test_faith), lwd = 3)
+```
+
+
+Get training and test set errors
+
+RMSE on training
+```{r}
+sqrt(sum((lm1$fitted.values - train_faith$eruptions)^2))
+```
+RMSE on test
+```{r}
+sqrt(sum((predict(lm1, newdata = test_faith) - test_faith$eruptions)^2))
+```
+Prediction intervals
+```{r}
+pred1 = predict(lm1, newdata = test_faith, interval = 'prediction')
+ord = order(test_faith$waiting)
+plot(test_faith$waiting, test_faith$eruptions, pch = 19, col = 'blue')
+matlines(test_faith$waiting[ord], pred1[ord,], type = 'l', col =  c(1,2,2), lty = c(1,1,1), lwd = 3)
+```
+
+Includes range of possible predictors
+
+same process with caret
+```{r}
+mod_fit = train(eruptions ~ waiting, data = train_faith, method = 'lm')
+summary(mod_fit$finalModel)
+```
+
+Predicting with regression, multiple covariates
+
+which predictors to include
+```{r}
+library(caret)
+library(ISLR)
+library(ggplot2)
+data(Wage)
+```
+```{r}
+Wage = subset(Wage, select = -c(logwage))
+summary(Wage)
+```
+
+Getting train and test
+```{r}
+in_train = createDataPartition(y = Wage$wage, p = .7, list = F)
+training = Wage[in_train,]
+testing =  Wage[-in_train,]
+dim(training)
+dim(testing)
+```
+
+Featureplot
+```{r}
+featurePlot(x = training[,c('age','education','jobclass')], y = training$wage, plot = 'pairs')
+```
+
+Age versus wage
+```{r}
+qplot(age, wage, data = training, color = jobclass)
+```
+Information variable might be able to predict the noise on the top 
+
+age, wage, by education
+```{r}
+qplot(age, wage, color = education, data = training)
+```
+
+Fit a linear model
+```{r}
+mod_fit = train(wage ~ age + jobclass + education, method = 'lm', data = training)
+finmod = mod_fit$finalModel
+print(finmod)
+```
+
+Diagnostics
+```{r}
+plot(finmod, 1, pch = 19, cex = .5)
+```
+Color by variables not used in the model
+```{r}
+qplot(finmod$fitted.values, finmod$residuals, color = race, data = training)
+```
+
+Plot by index
+```{r}
+plot(finmod$residuals, pch = 19)
+```
+
+
+There's no trend.If there's a trend. There is a relationship wherein rows are ordered by
+
+Predicted vs truth
+```{r}
+pred = predict(mod_fit, testing)
+qplot(wage, pred, color = year, data =testing)
+```
+If you want to use all covariates
+```{r}
+mod_fit_all = train(wage ~ ., data = training, method = 'lm')
+pred = predict(mod_fit_all, testing)
+qplot(wage, pred, data =testing)
+```
+
+## quiz
+```{r}
+library(AppliedPredictiveModeling)
+library(caret)
+data(AlzheimerDisease)
+```
+```{r}
+adData = data.frame(predictors)
+trainIndex = createDataPartition(diagnosis,p=0.5,list=FALSE)
+training = adData[trainIndex,]
+testing = adData[-trainIndex,]
+dim(training)
+dim(testing)
+```
+```{r}
+adData = data.frame(diagnosis,predictors)
+trainIndex = createDataPartition(diagnosis, p = 0.50,list=FALSE)
+training = adData[trainIndex,]
+testing = adData[-trainIndex,]
+dim(training)
+dim(testing)
+```
+
+
+
+```{r}
+library(AppliedPredictiveModeling)
+data(concrete)
+library(Hmisc)
+library(caret)
+set.seed(1000)
+inTrain = createDataPartition(mixtures$CompressiveStrength, p = 3/4)[[1]]
+training = mixtures[ inTrain,]
+testing = mixtures[-inTrain,]
+```
+Make a plot of the outcome compressivestrength versus the index of the samples, color by each variables. What do you notice on this plots
+```{r}
+index <- seq_along(1:nrow(training))
+qplot(index,CompressiveStrength, color = cut2(BlastFurnaceSlag), data = training)
+```
+
+```{r}
+library(AppliedPredictiveModeling)
+data(concrete)
+library(caret)
+set.seed(1000)
+inTrain = createDataPartition(mixtures$CompressiveStrength, p = 3/4)[[1]]
+training = mixtures[ inTrain,]
+testing = mixtures[-inTrain,]
+```
+
+Make a histogram and confirm that superplasticizer is skewed. Normally you might use the log transform to try and make the data more symmetric. Why would that be a poor choice
+```{r}
+hist(log(training$Superplasticizer + 1))
+```
+There are a lot of zeros
+
+```{r}
+library(caret)
+library(AppliedPredictiveModeling)
+set.seed(3433)
+data(AlzheimerDisease)
+adData = data.frame(diagnosis,predictors)
+inTrain = createDataPartition(adData$diagnosis, p = 3/4)[[1]]
+training = adData[ inTrain,]
+testing = adData[-inTrain,]
+```
+Find all predictor variables that begins with il. perform principal components on these variable using preprocess. calculate number of PCs to capture 90% of variance
+
+```{r}
+library(tidyverse)
+il_training = training %>%
+   select(starts_with('IL'))
+
+preproc = preProcess(il_training, method = 'pca')
+il_training_pca = predict(preproc, il_training)
+preproc$rotation
+```
+
+
+
+```{r}
+preproc = preProcess(il_training, method = "pca", thresh = 0.9)
+preproc$numComp
+```
+
+```{r}
+library(caret)
+library(AppliedPredictiveModeling)
+set.seed(3433)
+data(AlzheimerDisease)
+adData = data.frame(diagnosis,predictors)
+inTrain = createDataPartition(adData$diagnosis, p = 3/4)[[1]]
+training = adData[ inTrain,]
+testing = adData[-inTrain,]
+```
+Create a training dataset consisting of only predictors with Il and the diagnosis. build to predictive models, one using PCa with 80% and as they are. use GLM. which is more accurate
+
+
+```{r}
+library(tidyverse)
+il_training = training %>%
+   select(starts_with('IL'), diagnosis)
+
+il_testing = testing %>%
+   select(starts_with('IL'), diagnosis)
+
+model_fit = train(diagnosis ~., data = il_training, method = 'glm')
+confusionMatrix(il_testing$diagnosis, predict(model_fit, il_testing[,-13]))
+```
+
+PCa with 80% variance
+```{r}
+
+preproc = preProcess(il_training[,-13], method = 'pca', thresh = .8)
+
+train_pc = predict(preproc, il_training[,-13])
+test_pc = predict(preproc, il_testing[,-13])
+
+model_fit = train(x = train_pc, y = il_training$diagnosis, method = 'glm')
+confusionMatrix(il_testing$diagnosis, predict(model_fit, test_pc[,-13]))
+```
+
+75% and 72%
+
+Seems weird that non PCA has higher score. I'll just choose the 72% testing
+
+
+
+
