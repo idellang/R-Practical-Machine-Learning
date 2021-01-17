@@ -1,0 +1,453 @@
+---
+title: "Week 4"
+author: "Me"
+date: "1/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Regularized regression
+1. Fit a regression model
+2. Penalized large coefficients
+
+Pros
+- help bias variance tradeoff
+- help with model selection
+
+Cons:
+- computationally demanding
+- does not perform well as random forest and boosting
+
+```{r}
+prostate = read.table('https://web.stanford.edu/~hastie/ElemStatLearn/datasets/prostate.data')
+str(prostate)
+```
+
+
+Model selection approach: Split samples
+- no method better when data/computation permits
+- approach  
+      1 Divide data into training/testing/validation
+      2 treat validation as test data, train all competing models on the train data and pick best on validation
+      3 to appropriately assess performance, apply to test set
+      4 resplit and reperform steps 1 -3
+- Common problems
+      1. limited data
+      2. computational complexity
+      
+Issue for high dimensional data
+
+```{r}
+small = prostate[1:5,]
+lm(lpsa ~., data = small)
+```
+R wont be able to estimate because there are more predictors than samples. 
+
+
+### Ridge regression
+Smallest RSS subject to constraint where coefficient < s and s is inversely proportional to lambda. 
+lambda = 0 is just linear regression., lambda goes to infinity, all coeffiicents go towards zero. 
+
+### Lasso
+Almost same but has closed form solution. Can perform model selection by setting some coefficients to zero.
+
+## Combining predictors
+Ensemble method
+- combine classifiers by averaging or voting
+- combining classifiers improves accuracy
+- combining classifier reduces interpretability
+- boosting, bagging, and random forest are variants of this theme. 
+
+Suppose we have 5 independent classifiers, if accuracy for each is 70%
+- majority vote accuracy will increase to 83.7%
+- with 101 independent classifiers, 99.9%
+
+Approaches for combining classifiers
+- Bagging, boosting, random forest
+      - combine similar classifiers
+- combine different classifiers
+      - model stacking
+      - model ensembling
+
+Example with wage data
+```{r}
+library(ISLR)
+data(Wage)
+library(ggplot2)
+library(caret)
+```
+
+```{r}
+Wage = subset(Wage, select = - c(logwage))
+```
+
+```{r}
+inbuild = createDataPartition(y = Wage$wage, p = .7, list = FALSE)
+
+validation = Wage[-inbuild, ]
+build_data = Wage[inbuild,]
+```
+
+```{r}
+in_train = createDataPartition(y = build_data$wage, p = .7, list = F)
+
+training = build_data[in_train,]
+testing = build_data[-in_train,]
+```
+
+
+```{r}
+dim(training)
+dim(testing)
+dim(validation)
+```
+
+Build two different model
+```{r}
+mod1 = train(wage ~., data = training, method = 'glm')
+mod2 = train(wage ~., method = 'rf', data = training, trControl = trainControl(method = 'cv'), number = 3)
+```
+
+
+```{r}
+pred1 = predict(mod1, testing)
+pred2 = predict(mod2, testing)
+qplot(pred1, pred2, color = wage, data = testing)
+```
+The models do not agree with each other
+
+FIt a model that combines predictors
+```{r}
+predDf = data.frame(pred1, pred2, wage = testing$wage)
+comb_fit = train(wage ~., method = 'gam', data = predDf)
+compred = predict(comb_fit, predDf)
+```
+
+
+Testing errors
+```{r}
+sqrt(sum((pred1 - testing$wage)^2))
+sqrt(sum((pred2 - testing$wage)^2))
+sqrt(sum((compred - testing$wage)^2))
+```
+
+Predict on validation set
+```{r}
+pred1v = predict(mod1, validation)
+pred2v = predict(mod2, validation)
+predvdf = data.frame(pred1 = pred1v, pred2 = pred2v)
+comb_predv = predict(comb_fit, predvdf)
+```
+
+Validation errors
+```{r}
+sqrt(sum((pred1v - validation$wage)^2))
+sqrt(sum((pred2v - validation$wage)^2))
+sqrt(sum((comb_predv - validation$wage)^2))
+```
+
+Notes and resources
+- even simple blending can be useful
+- typical model or binary/multiclass data
+      - build an odd number of model
+      - predict with each model
+      - predict by class majority vote
+- this can get more complicated
+      - use caretEnsemble. 
+
+
+## Forecasting
+Applied to timeseries data. 
+additional challenges
+- data is dependent over time
+- Specific pattern types
+   - trends : long term increase or decrease
+   - seasonal patterns : patterns related to time
+   - cycles: patterns that rise and fall periodically
+- subsampling is more complicated
+- similar issues arise in spatial data
+   - dependency between nearby observations
+   - location specific effects
+- goal is predict one or more prediction in the future
+
+Beware of spurious correlations. 
+Beware of extrapolation. 
+
+
+```{r}
+library(quantmod)
+#Load data  
+from.dat <- as.Date("01/01/08", format = "%m/%d/%y")
+to.dat <- as.Date("12/31/13", format = "%m/%d/%y")
+getSymbols("GOOG", src = "yahoo", from = from.dat, to = to.dat)
+getSymbols("GOOGL", src = "yahoo", from = from.dat, to = to.dat)
+combined <- GOOG + GOOGL
+combined$GOOG.Volume <- GOOGL$GOOGL.Volume/2 
+head(combined)
+```
+
+```{r}
+mGoog = to.monthly(combined)
+goog_open = Op(mGoog)
+ts1 = ts(goog_open, frequency = 12)
+plot(ts1, xlab = 'Years + 1', ylab = 'Goog')
+```
+
+Time series decomposition
+- Trend : consistently increasing pattern over time
+- seasonal : when there is a pattern over fixed period of time that recurs
+- Cyclic : when data rises and falls over non-fixed periods
+
+Decompose a time series into parts
+```{r}
+plot(decompose(ts1), xlab = 'Years + 1')
+```
+
+```{r}
+ts1_train = window(ts1, start = 1, end = 5)
+ts1_test= window(ts1, start = 5, end = (7 - 0.01))
+ts1_train
+```
+
+Simple moving average
+```{r}
+plot(ts1_train)
+lines(ma(ts1_train, order = 3), col = 'red')
+```
+
+
+Exponential smoothing
+```{r}
+ets1 = ets(ts1_train, model = 'MMM')
+fcast = forecast(ets1)
+plot(fcast)
+lines(ts1_test, col = 'red')
+```
+Get the accuracy
+```{r}
+accuracy(fcast, ts1_test)
+```
+
+
+## Unsupervised prediction
+
+Sometimes you dont know the labels
+To build predictor
+- create clusters
+- name clusters
+- build predictor for clusters
+In a new dataset
+- predict clusters
+
+Iris example ignoring species labels
+```{r}
+data(iris)
+library(ggplot2)
+library(caret)
+
+in_train = createDataPartition(y = iris$Species, p = .7, list = F)
+training = iris[in_train,]
+testing = iris[-in_train,]
+dim(training)
+dim(testing)
+```
+
+Cluster with kmeans
+```{r}
+kmeans1 = kmeans(subset(training, select = -c(Species)), centers = 3)
+training$Clusters = as.factor(kmeans1$cluster)
+
+qplot(Petal.Width, Petal.Length, color = Clusters, data = training)
+```
+
+
+Compared to real labels
+```{r}
+table(kmeans1$cluster, training$Species)
+```
+
+Build predictor
+```{r}
+mod_fit = train(Clusters ~ ., data = subset(training, select = -c(Species)), method = 'rpart')
+table(predict(mod_fit, training), training$Species)
+```
+
+Apply on test
+```{r}
+test_clust_pred = predict(mod_fit, testing)
+table(test_clust_pred, testing$Species)
+```
+
+
+Notes
+- becareful of over analyzing clusters
+- basic approach to recommendation engines. 
+
+##QUiz
+
+Q1
+```{r}
+library(caret)
+vowel.train = read.csv('https://web.stanford.edu/~hastie/ElemStatLearn/datasets/vowel.train')
+vowel.test = read.csv('https://web.stanford.edu/~hastie/ElemStatLearn/datasets/vowel.test')
+```
+```{r}
+vowel.test$y = as.factor(vowel.test$y)
+vowel.train$y = as.factor(vowel.train$y )
+```
+
+```{r}
+set.seed(33833)
+rf_mod = train(y ~., data = vowel.train, method = 'rf')
+gbm_mod = train(y ~., data = vowel.train, method = 'gbm')
+```
+
+```{r}
+rf_pred = predict(rf_mod, vowel.test)
+gbm_pred = predict(gbm_mod, vowel.test)
+
+sum(rf_pred == gbm_pred)/length(rf_pred)
+```
+Accuracy
+.608
+.53
+.67
+
+
+Q2
+```{r}
+library(caret)
+
+library(gbm)
+
+set.seed(3433)
+
+library(AppliedPredictiveModeling)
+
+data(AlzheimerDisease)
+
+adData = data.frame(diagnosis,predictors)
+
+inTrain = createDataPartition(adData$diagnosis, p = 3/4)[[1]]
+
+training = adData[ inTrain,]
+
+testing = adData[-inTrain,]
+```
+
+```{r}
+set.seed(62433)
+
+rf_model = train(diagnosis ~ .,, data = training, method = 'rf')
+gbm_model = train(diagnosis ~., data = training, method = 'gbm')
+lda_model = train(diagnosis ~., data = training, method = 'lda')
+```
+
+Create stack model
+```{r}
+rf_train_pred = predict(rf_model, training)
+gbm_train_pred = predict(gbm_model, training)
+lda_train_pred = predict(lda_model, training)
+
+stack_data = data.frame(rf = rf_train_pred, gbm = gbm_train_pred, lda = lda_train_pred, diagnosis = training$diagnosis)
+stack_model = train(diagnosis ~., data= stack_data, method = 'rf')
+```
+Test model
+```{r}
+rf_test_pred = predict(rf_model, testing) #90
+gbm_test_pred = predict(gbm_model, testing) #89
+lda_test_pred = predict(lda_model, testing) #91
+
+
+stack_test_data = data.frame(rf = rf_test_pred, gbm = gbm_test_pred, lda = lda_test_pred, diagnosis = testing$diagnosis)
+
+stack_test_pred = predict(stack_model, stack_test_data) #90
+``` 
+I repeated the quiz twice and I still don't get the answer.
+
+
+```{r}
+set.seed(3523)
+
+library(caret)
+library(AppliedPredictiveModeling)
+
+data(concrete)
+
+inTrain = createDataPartition(concrete$CompressiveStrength, p = 3/4)[[1]]
+
+training = concrete[ inTrain,]
+
+testing = concrete[-inTrain,]
+```
+```{r}
+set.seed(233)
+lass_model = train(CompressiveStrength ~., data = training, method = 'lasso')
+
+plot(lass_model$finalModel, use.color = TRUE, xvar = 'fraction')
+```
+Cement was the last to go zero.
+
+Q4
+```{r}
+library(lubridate) # For year() function below
+
+dat = read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/gaData.csv")
+
+training = dat[year(dat$date) < 2012,]
+
+testing = dat[(year(dat$date)) > 2011,]
+
+tstrain = ts(training$visitsTumblr)
+```
+```{r}
+library(forecast)
+model = bats(tstrain)
+
+forecast_result = forecast(model, testing)
+```
+Im not sure how to do this. Ill just trial and error on the choices
+
+Q5
+```{r}
+set.seed(3523)
+library(AppliedPredictiveModeling)
+data(concrete)
+inTrain = createDataPartition(concrete$CompressiveStrength, p = 3/4)[[1]]
+training = concrete[inTrain, ]
+testing = concrete[-inTrain, ]
+```
+
+```{r}
+set.seed(325)
+svm_model = svm(CompressiveStrength ~., data = training)
+
+svm_pred = predict(svm_model, testing)
+RMSE(svm_pred, testing$CompressiveStrength)
+```
+7.96? must be one of 6.93 or 6.72.
+
+The answer is 6.72
+
+Im not sure why most models dont match the answers given
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

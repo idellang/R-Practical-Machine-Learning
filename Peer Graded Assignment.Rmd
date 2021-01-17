@@ -1,0 +1,174 @@
+---
+title: "Peer Graded Assignment"
+author: "Me"
+date: "1/17/2021"
+output: md_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, error = FALSE)
+```
+
+## Load the dataset
+
+Load libraries
+```{r warning=FALSE, error=FALSE}
+library(tidyverse)
+library(caret)
+library(ggplot2)
+library(corrplot)
+```
+
+Load the data
+```{r}
+training = read_csv('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv')
+testing = read_csv('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv')
+dim(training)
+dim(testing)
+```
+
+Inspect the data
+
+```{r}
+head(training)
+```
+
+Check for the response variable
+
+```{r}
+plot1 = training %>%
+      count(classe) %>%
+      ggplot(aes(factor(classe), n))+
+      geom_col(aes(fill = classe))+
+      theme(legend.position = 'none')+
+      labs(title = 'Counts of class',
+           x = 'class',
+           y = 'count')
+
+plot1
+```
+
+There is a class imbalance on the response variable
+
+Check for missing data
+```{r}
+num_missing = map_dbl(training, function(x) sum(is.na(x)))
+
+num_missing[num_missing != 0]
+```
+There were a lot of variables with missing values or no values ot all
+
+## Data Preprocessing
+
+### Remove non-helpful features
+
+
+Remove features with many missing values
+```{r}
+col_missing = names(num_missing[num_missing != 0])
+
+
+training = training %>%
+      select(-col_missing)
+```
+
+
+Remove near zero variance
+```{r}
+nz_cols = nearZeroVar(training)
+```
+
+Check the columns with near zero variance
+```{r}
+names(training)[nz_cols]
+```
+Remove those near zero variance values
+```{r}
+training = training[,-nz_cols]
+```
+
+
+Find high correlation
+```{r}
+numeric_train = map_lgl(training, is.numeric)
+numeric_train = training[,numeric_train]
+
+high_cor = findCorrelation(cor(numeric_train), cutoff = .75) 
+
+names(training)[high_cor]
+```
+
+Remove those that are highly correlated
+```{r}
+training = training[,-high_cor]
+```
+
+Check the structure of the remaining trianing set
+```{r}
+str(training)
+```
+
+Can remove ID and user name
+```{r}
+training = training %>%
+      select(-X1, -user_name)
+```
+
+
+Fix the test set to have the same structure as training set
+```{r}
+problem_id = testing$problem_id
+
+testing = testing %>%
+      select(-col_missing) %>%
+      select(-nz_cols) %>%
+      select(-high_cor) %>%
+      select(-X1, -user_name, -problem_id)
+
+
+```
+
+
+## Model fitting
+
+Split training into testing and training        
+```{r}
+set.seed(1111)
+in_training = createDataPartition(training$classe, p = .75, list = F)
+
+training_sample_train = training[in_training,]
+training_sample_test = training[-in_training,]
+dim(training_sample_train)
+dim(training_sample_test)
+```
+
+
+
+Fit a gbm model
+
+```{r results='hide'}
+gbm_model = train(classe ~., data= training_sample_train, method = 'gbm')
+
+```
+
+```{r}
+
+gbm_pred = predict(gbm_model, training_sample_test)
+table(gbm_pred, training_sample_test$classe)
+```
+
+
+```{r}
+sum(gbm_pred == training_sample_test$classe)/length(gbm_pred)
+```
+
+99% accuracy
+
+
+```{r}
+testing_pred = predict(gbm_model, testing)
+test_output = data.frame(problem_id = problem_id, classe = testing_pred)
+```
+
+I already tried it on coursera and got 100% accouracy
+
